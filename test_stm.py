@@ -1,47 +1,71 @@
-import pandas as pd
-from LS_STM import LSSTM
-from data_makers import make_data_stm
-from aiding_functions import load_obj
-from sklearn.svm import SVC
-import numpy as np
+from typing import Tuple, List
+
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from LSSTM.LS_STM import LSSTM
+from hottbox.core import Tensor
+from pandas._libs.tslibs import timestamps
 
+from LSSTM.aiding_functions import load_obj
+from LSSTM.data_makers import create_stm_slice
 
-raw_data = pd.read_csv('./finance_data/raw_data.csv')
-raw_data['Date'] = pd.to_datetime(raw_data['Date'], format='%Y-%m-%d')
-raw_data = raw_data.set_index('Date')
+# Load Data
 
-data_stm = load_obj('data_stm')
+# This dict has two Keys, "Volume" and "Price"
+# "Volume" contains a pd.DataFrame with a DatetimeIndex and the Cols: VIX Price   Gold Price   SPX Close   Label
+# "Price"  contains a pd.DataFrame with a DatetimeIndex and the Cols: VIX Volume  Gold Volume  SPX Volume  Label
+data_stm = load_obj("data_stm")
 
-M = len(data_stm['Price'])
-tensor_size = [2,3,2]
-lookBack = 250
+num_rows = len(data_stm["Price"])
+tensor_shape = [2, 3, 2]
+slice_width = 250
 
-n_tens = M - lookBack - tensor_size[0] + 1
+num_slices = num_rows - slice_width - tensor_shape[0] + 1  # TODO: why?
 
-y_pred_stm = np.zeros(n_tens - 1)
+y_pred = np.zeros(num_slices - 1)  # I guess this is because there is no prediction for the last row
 
 stm = LSSTM(C=10, max_iter=100)
 success = 0
-indices = []
-for i in range(n_tens - 1):
-    print("\r{0}".format((float(i) / (n_tens-1)) * 100))
-    train_data, train_labels, test_data, test_label, associated_index = make_data_stm(d=data_stm, start_index=i,
-                                                                                      L=lookBack,
-                                                                                      tensor_size=tensor_size)
-    stm.fit(train_data, train_labels)
-    y_tmp, _ = stm.predict(test_data)
-    y_pred_stm[i] = y_tmp[0]
+pred_dates_idcs = []
 
-    indices.append(associated_index)
-    if test_label == y_pred_stm[i]:
+# iteratively calculate slices
+for i in range(num_slices - 1): # called num_slices times with i as the i_th iteration
+
+    # print progress
+    print("\r{0}".format((float(i) / (num_slices - 1)) * 100))
+
+    # prepare data ## TODO adapt to my data
+    stm_slice: Tuple[List[Tensor], np.array, Tensor, np.float64, timestamps.Timestamp] = create_stm_slice(
+        d=data_stm, start_index=i, slice_width=slice_width, tensor_shape=tensor_shape
+    )
+    xs_train, y_train, xs_test, y_test, associated_index = stm_slice
+
+    # fit a model
+    stm.fit(xs_train, y_train)
+    y_tmp, _ = stm.predict(xs_test)
+    y_pred[i] = y_tmp[0]
+
+    #
+    pred_dates_idcs.append(associated_index)
+    if y_test == y_pred[i]:
         success += 1
 
-raw_data_diff = raw_data.diff().dropna().loc[indices]
-raw_data_diff['Strategy'] = raw_data_diff['SPX Close'] * y_pred_stm
-raw_data_diff = raw_data_diff[['SPX Close', 'Strategy']]
+#############
+# EVALUATION
+#############
+# read from file
+raw_data = pd.read_csv("./finance_data/raw_data.csv")  # Date, SPX Close, SPX Volume, VIX Price, VIX Volume, Gold Price, Gold Volume
 
-print(success/(n_tens - 1))
+# create DatetimeIndex
+raw_data["Date"] = pd.to_datetime(raw_data["Date"], format="%Y-%m-%d")
+raw_data = raw_data.set_index("Date")
 
-raw_data_diff.cumsum().plot(figsize=(10,5))
+# Calculate the Strategy Price
+plot_data = raw_data.diff().dropna().loc[pred_dates_idcs]  # each row contains difference to the previous row
+plot_data["Strategy"] = plot_data["SPX Close"] * y_pred
+plot_data = plot_data[["SPX Close", "Strategy"]]
+
+# Plot the result
+plot_data.cumsum().plot(figsize=(10, 5))  # plot the cummulated sum
 plt.show()
