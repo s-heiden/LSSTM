@@ -1,5 +1,5 @@
 import copy
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 import numpy as np
 from hottbox.core import Tensor
@@ -46,7 +46,7 @@ def make_data_svm(df, start_index, L):
     return xs_train, y_train, xs_test, y_test, associated_index
 
 
-def create_stm_slice(d: DataFrame, start_index, slice_width, tensor_shape) -> Tuple[List[Tensor], np.array, Tensor, np.float64, timestamps.Timestamp]:
+def create_stm_slice(d: Dict[str, DataFrame], start_index, slice_width, tensor_shape) -> Tuple[List[Tensor], np.array, Tensor, np.float64, timestamps.Timestamp]:
     """
 
     Notes: Assumes 3rd order tensors for now, and that the order of the idcs are known
