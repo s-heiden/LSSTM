@@ -1,17 +1,19 @@
 import pickle
-from hottbox.core import Tensor
+
 import numpy as np
+from hottbox.core import Tensor
 
-
-def save_obj(obj, name ):
-    with open('./finance_data/'+ name + '.pkl', 'wb') as f:
+def save_obj(obj, name):
+    with open("./finance_data/" + name + ".pkl", "wb") as f:
         pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
 
-def load_obj(name ):
-    with open('./finance_data/' + name + '.pkl', 'rb') as f:
+
+def load_obj(name):
+    with open("./finance_data/" + name + ".pkl", "rb") as f:
         return pickle.load(f)
 
-def contractor(x, w, modes):
+
+def contractor(x: Tensor, w, modes):
     """
 
     Parameters
